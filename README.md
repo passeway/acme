@@ -24,5 +24,8 @@ acme.sh --issue -d example.com -k ec-256 --standalone
 ```
 安装证书
 ```
-acme.sh --install-cert -d example.com --ecc --key-file /etc/x-ui/server.key  --fullchain-file /etc/x-ui/server.crt
+acme.sh --install-cert -d example.com --ecc \
+--key-file /etc/x-ui/server.key \
+--fullchain-file /etc/x-ui/server.crt \
+--reloadcmd "systemctl reload x-ui"
 ```
