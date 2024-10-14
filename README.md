@@ -6,7 +6,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/passeway/acme/refs/heads/mai
 ```
 apt install nginx
 ```
-安装acme：
+安装acme
 ```
 curl https://get.acme.sh | sh
 ```
