@@ -20,9 +20,9 @@ acme.sh --set-default-ca --server letsencrypt
 ```
 申请证书
 ```
-acme.sh  --issue -d 你的域名 -k ec-256 --webroot  /var/www/html
+acme.sh --issue -d example.com -k ec-256 --standalone
 ```
 安装证书
 ```
-acme.sh --install-cert -d 你的域名 --ecc --key-file /etc/x-ui/server.key  --fullchain-file /etc/x-ui/server.crt --reloadcmd "systemctl force-reload nginx"
+acme.sh --install-cert -d example.com --ecc --key-file /etc/x-ui/server.key  --fullchain-file /etc/x-ui/server.crt
 ```
