@@ -2,3 +2,27 @@
 ```
 bash <(curl -fsSL https://raw.githubusercontent.com/passeway/acme/refs/heads/main/acme.sh)
 ```
+安装nginx
+```
+apt install nginx
+```
+安装acme：
+```
+curl https://get.acme.sh | sh
+```
+添加软链接
+```
+ln -s  /root/.acme.sh/acme.sh /usr/local/bin/acme.sh
+```
+切换CA机构： 
+```
+acme.sh --set-default-ca --server letsencrypt
+```
+申请证书
+```
+acme.sh  --issue -d 你的域名 -k ec-256 --webroot  /var/www/html
+```
+安装证书
+```
+acme.sh --install-cert -d 你的域名 --ecc --key-file /etc/x-ui/server.key  --fullchain-file /etc/x-ui/server.crt --reloadcmd "systemctl force-reload nginx"
+```
