@@ -24,8 +24,9 @@ acme.sh --issue -d example.com -k ec-256 --standalone
 ```
 安装证书
 ```
+mkdir -p /root/cert \
 acme.sh --install-cert -d example.com --ecc \
---key-file /etc/x-ui/server.key \
---fullchain-file /etc/x-ui/server.crt \
---reloadcmd "systemctl reload x-ui"
+--key-file /root/cert/example.com.key \
+--fullchain-file /root/cert/example.com.crt \
+--reloadcmd "systemctl reload nginx"
 ```
