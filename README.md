@@ -1,6 +1,6 @@
 ## 一键脚本
 ```
-bash <(curl -fsSL https://raw.githubusercontent.com/passeway/acme/refs/heads/main/acme.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/passeway/acme/main/acme.sh)
 ```
 安装nginx
 ```
