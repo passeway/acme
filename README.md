@@ -35,6 +35,6 @@ acme.sh --install-cert -d example.com --ecc \
 --fullchain-file /root/cert/example.com.crt \
 --reloadcmd "systemctl reload nginx"
 ```
-获取DNS API
+
 [How to use DNS API](https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
 
