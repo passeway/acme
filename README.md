@@ -18,10 +18,15 @@ ln -s  /root/.acme.sh/acme.sh /usr/local/bin/acme.sh
 ```
 acme.sh --set-default-ca --server letsencrypt
 ```
+
 申请证书
 ```
-acme.sh --issue -d example.com -k ec-256 --standalone
+acme.sh --issue -d example.com --keylength ec-256 --standalone
 ```
+```
+acme.sh --issue --dns dns_cf -d *.example.com --keylength ec-256
+```
+
 安装证书
 ```
 mkdir -p /root/cert && \
@@ -30,4 +35,6 @@ acme.sh --install-cert -d example.com --ecc \
 --fullchain-file /root/cert/example.com.crt \
 --reloadcmd "systemctl reload nginx"
 ```
+获取DNS API
+[How to use DNS API](https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
 
