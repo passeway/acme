@@ -124,8 +124,8 @@ check_80(){
 }
 
 checktls() {
-    if [[ -f /root/cert.crt && -f /root/private.key ]]; then
-        if [[ -s /root/cert.crt && -s /root/private.key ]]; then
+    if [[ -f /root/cert/${domain}.crt && -f /root/cert/${domain}.key ]]; then
+        if [[ -s /root/cert/${domain}.crt && -s /root/cert/${domain}.key ]]; then
             if [[ -n $(type -P wg-quick) && -n $(type -P wgcf) ]]; then
                 wg-quick up wgcf >/dev/null 2>&1
             fi
@@ -137,9 +137,9 @@ checktls() {
             sed -i '/--cron/d' /etc/crontab >/dev/null 2>&1
             echo "0 0 * * * root bash /root/.acme.sh/acme.sh --cron -f >/dev/null 2>&1" >> /etc/crontab
 
-            green "证书申请成功! 脚本申请到的证书 (cert.crt) 和私钥 (private.key) 文件已保存到 /root 文件夹下"
-            yellow "证书 crt 文件路径如下: /root/cert.crt"
-            yellow "私钥 key 文件路径如下: /root/private.key"
+            green "证书申请成功! 脚本申请到的证书 (${domain}.crt) 和私钥 (${domain}.key) 文件已保存到 /root/cert 文件夹下"
+            yellow "证书 crt 文件路径如下: /root/cert/${domain}.crt"
+            yellow "私钥 key 文件路径如下: /root/cert/${domain}.key"
         else
             if [[ -n $(type -P wg-quick) && -n $(type -P wgcf) ]]; then
                 wg-quick up wgcf >/dev/null 2>&1
@@ -159,6 +159,8 @@ checktls() {
 
 acme_standalone(){
     [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+
+    mkdir -p /root/cert
 
     check_80
 
@@ -240,7 +242,7 @@ acme_standalone(){
         fi
     fi
     
-    bash ~/.acme.sh/acme.sh --install-cert -d ${domain} --key-file /root/private.key --fullchain-file /root/cert.crt --ecc
+    bash ~/.acme.sh/acme.sh --install-cert -d ${domain} --key-file /root/cert/${domain}.key --fullchain-file /root/cert/${domain}.crt --ecc
     checktls
 }
 
@@ -248,6 +250,8 @@ acme_cfapiTLD(){
     [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
     
     check_ip
+    
+    mkdir -p /root/cert
 
     read -rp "请输入需要申请证书的域名: " domain
     if [[ $(echo ${domain:0-2}) =~ cf|ga|gq|ml|tk ]]; then
@@ -268,7 +272,7 @@ acme_cfapiTLD(){
         bash ~/.acme.sh/acme.sh --issue --dns dns_cf -d "${domain}" -k ec-256 --insecure
     fi
 
-    bash ~/.acme.sh/acme.sh --install-cert -d "${domain}" --key-file /root/private.key --fullchain-file /root/cert.crt --ecc
+    bash ~/.acme.sh/acme.sh --install-cert -d "${domain}" --key-file /root/cert/${domain}.key --fullchain-file /root/cert/${domain}.crt --ecc
     checktls
 }
 
@@ -276,6 +280,8 @@ acme_cfapiNTLD(){
     [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
     
     check_ip
+    
+    mkdir -p /root/cert
     
     read -rp "请输入需要申请证书的泛域名 (输入格式：example.com): " domain
     [[ -z $domain ]] && red "未输入域名，无法执行操作！" && exit 1
@@ -297,7 +303,7 @@ acme_cfapiNTLD(){
         bash ~/.acme.sh/acme.sh --issue --dns dns_cf -d "*.${domain}" -d "${domain}" -k ec-256 --insecure
     fi
 
-    bash ~/.acme.sh/acme.sh --install-cert -d "*.${domain}" --key-file /root/private.key --fullchain-file /root/cert.crt --ecc
+    bash ~/.acme.sh/acme.sh --install-cert -d "*.${domain}" --key-file /root/cert/${domain}.key --fullchain-file /root/cert/${domain}.crt --ecc
     checktls
 }
 
@@ -318,7 +324,7 @@ revoke_cert() {
         bash ~/.acme.sh/acme.sh --remove -d ${domain} --ecc
 
         rm -rf ~/.acme.sh/${domain}_ecc
-        rm -f /root/cert.crt /root/private.key
+        rm -f /root/cert/${domain}.crt /root/cert/${domain}.key
 
         green "撤销 ${domain} 的域名证书成功"
     else
@@ -379,3 +385,4 @@ menu() {
 }
 
 menu
+
