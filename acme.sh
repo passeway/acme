@@ -349,8 +349,8 @@ switch_provider(){
 
 menu() {
     clear
-    echo -e " ${GREEN}1.${PLAIN} 安装 Acme.sh 域名证书申请脚本"
-    echo -e " ${GREEN}2.${PLAIN} 卸载 Acme.sh 域名证书申请脚本"
+    echo -e " ${GREEN}1.${PLAIN} 安装 Acme.sh"
+    echo -e " ${GREEN}2.${PLAIN} 卸载 Acme.sh"
     echo " -------------"
     echo -e " ${GREEN}3.${PLAIN} 申请单域名证书 ${YELLOW}(80端口申请)${PLAIN}"
     echo -e " ${GREEN}4.${PLAIN} 申请单域名证书 ${YELLOW}(CF API申请)${PLAIN}"
