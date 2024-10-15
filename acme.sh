@@ -83,7 +83,6 @@ inst_acme(){
         red "抱歉, Acme.sh 证书一键申请脚本安装失败"
         green "建议如下："
         yellow "1. 检查 VPS 的网络环境"
-        yellow "2. 脚本可能跟不上时代, 建议截图发布到 GitHub Issues 询问"
     fi
 }
 
