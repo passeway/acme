@@ -1,208 +1,381 @@
 #!/bin/bash
 
-# 脚本功能：
-# 1. 提示用户输入域名
-# 2. 安装 acme.sh
-# 3. 创建软链接
-# 4. 设置默认 CA 为 Let's Encrypt
-# 5. 申请 ECC 证书
-# 6. 安装证书到指定路径
-# 7. 自动开放所需端口（80 和 443）
-# 8. 设置自动续期
-# 9. 验证证书安装
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+PLAIN='\033[0m'
 
-# 添加日志记录
-LOG_FILE="/var/log/ssl_installation.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
-echo "========== $(date) =========="
+red(){
+    echo -e "\033[31m\033[01m$1\033[0m"
+}
 
-# 设置变量
-ACME_HOME="$HOME/.acme.sh"
-INSTALL_DIR="/usr/local/bin"
-CERT_DIR="/etc/x-ui"
+green(){
+    echo -e "\033[32m\033[01m$1\033[0m"
+}
 
-# 检查必要的命令
-REQUIRED_CMDS=("curl" "systemctl" "crontab")
-for cmd in "${REQUIRED_CMDS[@]}"; do
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo "缺少必要的命令：$cmd。请安装后重试。"
-        exit 1
+yellow(){
+    echo -e "\033[33m\033[01m$1\033[0m"
+}
+
+REGEX=("debian" "ubuntu" "centos|red hat|kernel|oracle linux|alma|rocky" "'amazon linux'" "fedora")
+RELEASE=("Debian" "Ubuntu" "CentOS" "CentOS" "Fedora")
+PACKAGE_UPDATE=("apt-get update" "apt-get update" "yum -y update" "yum -y update" "yum -y update")
+PACKAGE_INSTALL=("apt -y install" "apt -y install" "yum -y install" "yum -y install" "yum -y install")
+PACKAGE_REMOVE=("apt -y remove" "apt -y remove" "yum -y remove" "yum -y remove" "yum -y remove")
+PACKAGE_UNINSTALL=("apt -y autoremove" "apt -y autoremove" "yum -y autoremove" "yum -y autoremove" "yum -y autoremove")
+
+[[ $EUID -ne 0 ]] && red "注意：请在root用户下运行脚本" && exit 1
+
+CMD=("$(grep -i pretty_name /etc/os-release 2>/dev/null | cut -d \" -f2)" "$(hostnamectl 2>/dev/null | grep -i system | cut -d : -f2)" "$(lsb_release -sd 2>/dev/null)" "$(grep -i description /etc/lsb-release 2>/dev/null | cut -d \" -f2)" "$(grep . /etc/redhat-release 2>/dev/null)" "$(grep . /etc/issue 2>/dev/null | cut -d \\ -f1 | sed '/^[ ]*$/d')")
+
+for i in "${CMD[@]}"; do
+    SYS="$i"
+    if [[ -n $SYS ]]; then
+        break
     fi
 done
 
-# 检查是否以 root 用户运行
-if [ "$(id -u)" -ne 0 ]; then
-    echo "请以 root 用户或使用 sudo 运行此脚本。"
-    exit 1
-fi
-
-# 1. 提示用户输入域名
-read -p "请输入要申请证书的域名（例如 example.com）： " DOMAIN
-
-# 简单的域名格式验证
-if [[ ! "$DOMAIN" =~ ^([a-zA-Z0-9](-?[a-zA-Z0-9])*\.)+[a-zA-Z]{2,}$ ]]; then
-    echo "输入的域名格式不正确，请重新运行脚本并输入有效的域名。"
-    exit 1
-fi
-
-echo "您输入的域名是：$DOMAIN"
-
-# 2. 安装 acme.sh
-if [ -d "$ACME_HOME" ]; then
-    echo "acme.sh 已经安装在 $ACME_HOME。"
-else
-    echo "正在安装 acme.sh..."
-    curl https://get.acme.sh | sh
-    if [ $? -ne 0 ]; then
-        echo "acme.sh 安装失败，请检查网络连接或访问权限。"
-        exit 1
+for ((int = 0; int < ${#REGEX[@]}; int++)); do
+    if [[ $(echo "$SYS" | tr '[:upper:]' '[:lower:]') =~ ${REGEX[int]} ]]; then
+        SYSTEM="${RELEASE[int]}" && [[ -n $SYSTEM ]] && break
     fi
-    echo "acme.sh 安装完成。"
-fi
+done
 
-# 3. 创建软链接
-if [ -L "$INSTALL_DIR/acme.sh" ]; then
-    echo "软链接 /usr/local/bin/acme.sh 已存在。"
-else
-    echo "正在创建软链接 /usr/local/bin/acme.sh..."
-    ln -s "$ACME_HOME/acme.sh" "$INSTALL_DIR/acme.sh"
-    if [ $? -ne 0 ]; then
-        echo "创建软链接失败，请检查权限。"
-        exit 1
+[[ -z $SYSTEM ]] && red "不支持当前VPS系统, 请使用主流的操作系统" && exit 1
+
+check_ip(){
+    ipv4=$(curl -s4m8 ip.sb -k | sed -n 1p)
+    ipv6=$(curl -s6m8 ip.sb -k | sed -n 1p)
+}
+
+inst_acme(){
+    if [[ ! $SYSTEM == "CentOS" ]]; then
+        ${PACKAGE_UPDATE[int]}
     fi
-    echo "软链接创建完成。"
-fi
+    ${PACKAGE_INSTALL[int]} curl wget sudo socat openssl dnsutils
 
-# 加载 acme.sh 环境变量
-if [ -f "$ACME_HOME/acme.sh.env" ]; then
-    source "$ACME_HOME/acme.sh.env"
-else
-    echo "未找到 acme.sh.env 文件，跳过加载环境变量。"
-fi
-
-# 4. 设置默认 CA 为 Let's Encrypt
-echo "设置默认 CA 为 Let's Encrypt..."
-acme.sh --set-default-ca --server letsencrypt
-if [ $? -ne 0 ]; then
-    echo "设置默认 CA 失败。"
-    exit 1
-fi
-echo "默认 CA 已设置为 Let's Encrypt。"
-
-# 5. 自动开放所需端口（80 和 443）
-echo "正在检测和开放所需的端口（80 和 443）..."
-
-# 检查 Web 服务器状态
-if systemctl is-active --quiet nginx; then
-    echo "检测到 nginx 服务正在运行。"
-elif systemctl is-active --quiet apache2; then
-    echo "检测到 apache2 服务正在运行。"
-else
-    echo "未检测到 nginx 或 apache2 服务正在运行。请确保 Web 服务器已启动并使用正确的 Webroot。"
-    exit 1
-fi
-
-# 函数：开放端口
-open_port() {
-    local PORT=$1
-    local PROTOCOL=$2
-    if command -v ufw >/dev/null 2>&1; then
-        ufw allow "$PORT/$PROTOCOL" && echo "已开放端口 $PORT/$PROTOCOL (ufw)"
-        ufw status | grep "$PORT/$PROTOCOL" >/dev/null 2>&1 || echo "警告：端口 $PORT/$PROTOCOL 可能未成功开放。"
-    elif command -v firewall-cmd >/dev/null 2>&1; then
-        firewall-cmd --permanent --add-port="$PORT"/"$PROTOCOL" && echo "已开放端口 $PORT/$PROTOCOL (firewalld)"
-        firewall-cmd --reload
-        firewall-cmd --list-ports | grep "$PORT/$PROTOCOL" >/dev/null 2>&1 || echo "警告：端口 $PORT/$PROTOCOL 可能未成功开放。"
-    elif command -v iptables >/dev/null 2>&1; then
-        iptables -C INPUT -p "$PROTOCOL" --dport "$PORT" -j ACCEPT 2>/dev/null || iptables -A INPUT -p "$PROTOCOL" --dport "$PORT" -j ACCEPT && echo "已开放端口 $PORT/$PROTOCOL (iptables)"
-        # 保存 iptables 规则（视发行版而定）
-        if command -v netfilter-persistent >/dev/null 2>&1; then
-            netfilter-persistent save
-        elif command -v service >/dev/null 2>&1; then
-            service iptables save
-        fi
-        iptables -L INPUT -v -n | grep "$PORT" >/dev/null 2>&1 || echo "警告：端口 $PORT/$PROTOCOL 可能未成功开放。"
+    if [[ $SYSTEM == "CentOS" ]]; then
+        ${PACKAGE_INSTALL[int]} cronie
+        systemctl start crond
+        systemctl enable crond
     else
-        echo "未检测到已知的防火墙管理工具（ufw, firewalld, iptables）。请手动开放端口 80 和 443。"
+        ${PACKAGE_INSTALL[int]} cron
+        systemctl start cron
+        systemctl enable cron
+    fi
+
+    read -rp "请输入注册邮箱 (例: admin@gmail.com, 或留空自动生成一个gmail邮箱): " email
+    if [[ -z $email ]]; then
+        automail=$(date +%s%N | md5sum | cut -c 1-16)
+        email=$automail@gmail.com
+        yellow "已取消设置邮箱, 使用自动生成的gmail邮箱: $email"
+    fi
+
+    curl https://get.acme.sh | sh -s email=$email
+    source ~/.bashrc
+    bash ~/.acme.sh/acme.sh --upgrade --auto-upgrade
+    
+    switch_provider
+
+    if [[ -n $(~/.acme.sh/acme.sh -v 2>/dev/null) ]]; then
+        green "Acme.sh 证书一键申请脚本安装成功!"
+    else
+        red "抱歉, Acme.sh 证书一键申请脚本安装失败"
+        green "建议如下："
+        yellow "1. 检查 VPS 的网络环境"
+        yellow "2. 脚本可能跟不上时代, 建议截图发布到 GitHub Issues 询问"
     fi
 }
 
-# 开放 HTTP (80) 和 HTTPS (443) 端口
-open_port 80 tcp
-open_port 443 tcp
+unst_acme() {
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && yellow "未安装Acme.sh, 卸载程序无法执行!" && exit 1
+    ~/.acme.sh/acme.sh --uninstall
+    sed -i '/--cron/d' /etc/crontab >/dev/null 2>&1
+    rm -rf ~/.acme.sh
+    green "Acme.sh 证书一键申请脚本已彻底卸载!"
+}
 
-echo "端口开放完成。"
-
-# 6. 申请 ECC 证书
-echo "正在申请 ECC 证书..."
-read -p "请输入 Webroot 路径（默认 /var/www/html）： " WEBROOT
-WEBROOT=${WEBROOT:-/var/www/html}
-mkdir -p "$WEBROOT"  # 确保 webroot 目录存在
-
-acme.sh --issue -d "$DOMAIN" -k ec-256 --webroot "$WEBROOT"
-if [ $? -ne 0 ]; then
-    echo "证书申请失败。请确保域名已正确解析并且服务器可以通过 HTTP 进行验证。"
-    exit 1
-fi
-echo "证书申请成功。"
-
-# 7. 安装证书
-echo "正在安装证书到 $CERT_DIR..."
-# 确保目标目录存在
-mkdir -p "$CERT_DIR"
-
-read -p "请输入需要重载的服务名称（例如 x-ui），或按 Enter 跳过： " SERVICE_NAME
-if [ -n "$SERVICE_NAME" ]; then
-    RELOADCMD="systemctl reload $SERVICE_NAME"
-else
-    RELOADCMD=""
-fi
-
-if [ -n "$RELOADCMD" ]; then
-    acme.sh --install-cert -d "$DOMAIN" \
-        --ecc \
-        --key-file "$CERT_DIR/server.key" \
-        --fullchain-file "$CERT_DIR/server.crt" \
-        --reloadcmd "$RELOADCMD"
-else
-    acme.sh --install-cert -d "$DOMAIN" \
-        --ecc \
-        --key-file "$CERT_DIR/server.key" \
-        --fullchain-file "$CERT_DIR/server.crt"
-fi
-
-if [ $? -ne 0 ]; then
-    echo "证书安装失败。"
-    exit 1
-fi
-echo "证书已成功安装到 $CERT_DIR。"
-
-# 8. 设置自动续期（acme.sh 默认已设置，此处可验证）
-echo "正在检查自动续期任务..."
-if command -v systemctl >/dev/null 2>&1 && systemctl list-timers | grep -q "acme"; then
-    echo "自动续期任务已通过 systemd timers 设置。"
-elif crontab -l | grep -q "acme.sh --cron"; then
-    echo "自动续期任务已存在于 crontab。"
-else
-    echo "添加自动续期任务到 crontab..."
-    (crontab -l 2>/dev/null; echo "0 0 * * * \"$ACME_HOME/acme.sh\" --cron --home \"$ACME_HOME\" > /dev/null") | crontab -
-    if [ $? -ne 0 ]; then
-        echo "添加自动续期任务失败。"
-        exit 1
+check_80(){
+   
+    if [[ -z $(type -P lsof) ]]; then
+        if [[ ! $SYSTEM == "CentOS" ]]; then
+            ${PACKAGE_UPDATE[int]}
+        fi
+        ${PACKAGE_INSTALL[int]} lsof
     fi
-    echo "自动续期任务已添加到 crontab。"
-fi
+    
+    yellow "正在检测 80 端口是否占用..."
+    sleep 1
+    
+    if [[  $(lsof -i:"80" | grep -i -c "listen") -eq 0 ]]; then
+        green "检测到目前 80 端口未被占用"
+        sleep 1
+    else
+        red "检测到目前 80 端口被其他程序被占用，以下为占用程序信息"
+        lsof -i:"80"
+        read -rp "如需结束占用进程请按Y，按其他键则退出 [Y/N]: " yn
+        if [[ $yn =~ "Y"|"y" ]]; then
+            lsof -i:"80" | awk '{print $2}' | grep -v "PID" | xargs kill -9
+            sleep 1
+        else
+            exit 1
+        fi
+    fi
+}
 
-# 9. 验证证书安装
-echo "正在验证证书安装情况..."
-if [ -f "$CERT_DIR/server.crt" ] && [ -f "$CERT_DIR/server.key" ]; then
-    echo "证书和私钥文件已正确安装："
-    echo "证书文件：$CERT_DIR/server.crt"
-    echo "私钥文件：$CERT_DIR/server.key"
-    echo "您可以通过访问 https://$DOMAIN 来验证证书是否生效。"
-else
-    echo "证书文件或私钥文件不存在，请检查安装步骤。"
-    exit 1
-fi
+checktls() {
+    if [[ -f /root/cert.crt && -f /root/private.key ]]; then
+        if [[ -s /root/cert.crt && -s /root/private.key ]]; then
+            if [[ -n $(type -P wg-quick) && -n $(type -P wgcf) ]]; then
+                wg-quick up wgcf >/dev/null 2>&1
+            fi
+            if [[ -a "/opt/warp-go/warp-go" ]]; then
+                systemctl start warp-go 
+            fi
 
-echo "SSL 证书安装和端口开放过程完成。"
+            echo $domain > /root/ca.log
+            sed -i '/--cron/d' /etc/crontab >/dev/null 2>&1
+            echo "0 0 * * * root bash /root/.acme.sh/acme.sh --cron -f >/dev/null 2>&1" >> /etc/crontab
+
+            green "证书申请成功! 脚本申请到的证书 (cert.crt) 和私钥 (private.key) 文件已保存到 /root 文件夹下"
+            yellow "证书 crt 文件路径如下: /root/cert.crt"
+            yellow "私钥 key 文件路径如下: /root/private.key"
+        else
+            if [[ -n $(type -P wg-quick) && -n $(type -P wgcf) ]]; then
+                wg-quick up wgcf >/dev/null 2>&1
+            fi
+            if [[ -a "/opt/warp-go/warp-go" ]]; then
+                systemctl start warp-go 
+            fi
+
+            red "抱歉，证书申请失败"
+            green "建议如下: "
+            yellow "1. 自行检测防火墙是否打开, 如使用 80 端口申请模式时, 请关闭防火墙或放行 80 端口"
+            yellow "2. 同一域名多次申请可能会触发 Let's Encrypt 官方风控, 请尝试使用脚本菜单的 9 选项更换证书颁发机构, 再重试申请证书, 或更换域名、或等待 7 天后再尝试执行脚本"
+            yellow "3. 脚本可能跟不上时代, 建议截图发布到 GitHub Issues、GitLab Issues、论坛或 TG 群询问"
+        fi
+    fi
+}
+
+acme_standalone(){
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+
+    check_80
+
+    WARPv4Status=$(curl -s4m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
+    WARPv6Status=$(curl -s6m8 https://www.cloudflare.com/cdn-cgi/trace -k | grep warp | cut -d= -f2)
+    if [[ $WARPv4Status =~ on|plus ]] || [[ $WARPv6Status =~ on|plus ]]; then
+        wg-quick down wgcf >/dev/null 2>&1
+        systemctl stop warp-go >/dev/null 2>&1
+    fi
+    
+    check_ip
+    
+    echo ""
+    yellow "在使用 80 端口申请模式时, 请先将您的域名解析至你的 VPS 的真实 IP 地址, 否则会导致证书申请失败"
+    echo ""
+    if [[ -n $ipv4 && -n $ipv6 ]]; then
+        echo -e "VPS 的真实 IPv4 地址为: ${GREEN}$ipv4${PLAIN}"
+        echo -e "VPS 的真实 IPv6 地址为: ${GREEN}$ipv6${PLAIN}"
+    elif [[ -n $ipv4 && -z $ipv6 ]]; then
+        echo -e "VPS 的真实 IPv4 地址为: ${GREEN}$ipv4${PLAIN}"
+    elif [[ -z $ipv4 && -n $ipv6 ]]; then
+        echo -e "VPS 的真实 IPv6 地址为: ${GREEN}$ipv6${PLAIN}"
+    fi
+    echo ""
+
+    read -rp "请输入解析完成的域名: " domain
+    [[ -z $domain ]] && red "未输入域名，无法执行操作！" && exit 1
+    green "已输入的域名：$domain" && sleep 1
+
+    domainIP=$(dig @8.8.8.8 +time=2 +short "$domain" 2>/dev/null | sed -n 1p)
+    if echo $domainIP | grep -q "network unreachable\|timed out" || [[ -z $domainIP ]]; then
+        domainIP=$(dig @2001:4860:4860::8888 +time=2 aaaa +short "$domain" 2>/dev/null | sed -n 1p)
+    fi
+    if echo $domainIP | grep -q "network unreachable\|timed out" || [[ -z $domainIP ]] ; then
+        red "未解析出 IP，请检查域名是否输入有误" 
+        yellow "是否尝试强行匹配？"
+        green "1. 是，将使用强行匹配"
+        green "2. 否，退出脚本"
+        read -p "请输入选项 [1-2]：" ipChoice
+        if [[ $ipChoice == 1 ]]; then
+            yellow "将尝试强行匹配以申请域名证书"
+        else
+            red "将退出脚本"
+            exit 1
+        fi
+    fi
+    
+    if [[ $domainIP == $ipv6 ]]; then
+        bash ~/.acme.sh/acme.sh --issue -d ${domain} --standalone -k ec-256 --listen-v6 --insecure
+    fi
+    if [[ $domainIP == $ipv4 ]]; then
+        bash ~/.acme.sh/acme.sh --issue -d ${domain} --standalone -k ec-256 --insecure
+    fi
+    
+    if [[ -n $(echo $domainIP | grep nginx) ]]; then
+        if [[ -n $(type -P wg-quick) && -n $(type -P wgcf) ]]; then
+            wg-quick up wgcf >/dev/null 2>&1
+        fi
+        if [[ -a "/opt/warp-go/warp-go" ]]; then
+            systemctl start warp-go 
+        fi
+        yellow "域名解析失败, 请检查域名是否正确填写或等待解析完成再执行脚本"
+        exit 1
+    elif [[ -n $(echo $domainIP | grep ":") || -n $(echo $domainIP | grep ".") ]]; then
+        if [[ $domainIP != $ipv4 ]] && [[ $domainIP != $ipv6 ]]; then
+            if [[ -n $(type -P wg-quick) && -n $(type -P wgcf) ]]; then
+                wg-quick up wgcf >/dev/null 2>&1
+            fi
+            if [[ -a "/opt/warp-go/warp-go" ]]; then
+                systemctl start warp-go 
+            fi
+            green "域名 ${domain} 目前解析的IP: ($domainIP)"
+            red "当前域名解析的 IP 与当前 VPS 使用的真实IP不匹配"
+            green "建议如下："
+            yellow "1. 请确保 CloudFlare 小云朵为关闭状态 (仅限DNS), 其他域名解析或 CDN 网站设置同理"
+            yellow "2. 请检查 DNS 解析设置的 IP 是否为 VPS 的真实 IP"
+            yellow "3. 脚本可能跟不上时代, 建议截图发布到 GitHub Issues、GitLab Issues、论坛或 TG 群询问"
+            exit 1
+        fi
+    fi
+    
+    bash ~/.acme.sh/acme.sh --install-cert -d ${domain} --key-file /root/private.key --fullchain-file /root/cert.crt --ecc
+    checktls
+}
+
+acme_cfapiTLD(){
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+    
+    check_ip
+
+    read -rp "请输入需要申请证书的域名: " domain
+    if [[ $(echo ${domain:0-2}) =~ cf|ga|gq|ml|tk ]]; then
+        red "检测为 Freenom 免费域名, 由于 CloudFlare API 不支持, 故无法使用本模式申请!"
+        exit
+    fi
+
+    read -rp "请输入 CloudFlare Global API Key: " cfgak
+    [[ -z $cfgak ]] && red "未输入 CloudFlare Global API Key, 无法执行操作!" && exit 1
+    export CF_Key="$cfgak"
+    read -rp "请输入 CloudFlare 的登录邮箱: " cfemail
+    [[ -z $domain ]] && red "未输入 CloudFlare 的登录邮箱, 无法执行操作!" && exit 1
+    export CF_Email="$cfemail"
+    
+    if [[ -z $ipv4 ]]; then
+        bash ~/.acme.sh/acme.sh --issue --dns dns_cf -d "${domain}" -k ec-256 --listen-v6 --insecure
+    else
+        bash ~/.acme.sh/acme.sh --issue --dns dns_cf -d "${domain}" -k ec-256 --insecure
+    fi
+
+    bash ~/.acme.sh/acme.sh --install-cert -d "${domain}" --key-file /root/private.key --fullchain-file /root/cert.crt --ecc
+    checktls
+}
+
+acme_cfapiNTLD(){
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+    
+    check_ip
+    
+    read -rp "请输入需要申请证书的泛域名 (输入格式：example.com): " domain
+    [[ -z $domain ]] && red "未输入域名，无法执行操作！" && exit 1
+    if [[ $(echo ${domain:0-2}) =~ cf|ga|gq|ml|tk ]]; then
+        red "检测为 Freenom 免费域名, 由于 CloudFlare API 不支持, 故无法使用本模式申请!"
+        back2menu
+    fi
+
+    read -rp "请输入 CloudFlare Global API Key: " cfgak
+    [[ -z $cfgak ]] && red "未输入 CloudFlare Global API Key, 无法执行操作！" && exit 1
+    export CF_Key="$cfgak"
+    read -rp "请输入 CloudFlare 的登录邮箱: " cfemail
+    [[ -z $domain ]] && red "未输入 CloudFlare 的登录邮箱, 无法执行操作!" && exit 1
+    export CF_Email="$cfemail"
+
+    if [[ -z $ipv4 ]]; then
+        bash ~/.acme.sh/acme.sh --issue --dns dns_cf -d "*.${domain}" -d "${domain}" -k ec-256 --listen-v6 --insecure
+    else
+        bash ~/.acme.sh/acme.sh --issue --dns dns_cf -d "*.${domain}" -d "${domain}" -k ec-256 --insecure
+    fi
+
+    bash ~/.acme.sh/acme.sh --install-cert -d "*.${domain}" --key-file /root/private.key --fullchain-file /root/cert.crt --ecc
+    checktls
+}
+
+view_cert(){
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+    bash ~/.acme.sh/acme.sh --list
+}
+
+revoke_cert() {
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+
+    bash ~/.acme.sh/acme.sh --list
+    read -rp "请输入要撤销的域名证书 (复制 Main_Domain 下显示的域名): " domain
+    [[ -z $domain ]] && red "未输入域名，无法执行操作!" && exit 1
+
+    if [[ -n $(bash ~/.acme.sh/acme.sh --list | grep $domain) ]]; then
+        bash ~/.acme.sh/acme.sh --revoke -d ${domain} --ecc
+        bash ~/.acme.sh/acme.sh --remove -d ${domain} --ecc
+
+        rm -rf ~/.acme.sh/${domain}_ecc
+        rm -f /root/cert.crt /root/private.key
+
+        green "撤销 ${domain} 的域名证书成功"
+    else
+        red "未找到 ${domain} 的域名证书, 请检查后重新运行!"
+    fi
+}
+
+renew_cert() {
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && yellow "未安装acme.sh, 无法执行操作!" && exit 1
+    bash ~/.acme.sh/acme.sh --cron -f
+}
+
+switch_provider(){
+    [[ -z $(~/.acme.sh/acme.sh -v 2>/dev/null) ]] && inst_acme
+
+    yellow "请选择证书提供商, 默认通过 Letsencrypt.org 来申请证书 "
+    yellow "如果证书申请失败, 例如一天内通过 Letsencrypt.org 申请次数过多, 可选 BuyPass.com 或 ZeroSSL.com 来申请."
+    echo -e " ${GREEN}1.${PLAIN} Letsencrypt.org ${YELLOW}(默认)${PLAIN}"
+    echo -e " ${GREEN}2.${PLAIN} BuyPass.com"
+    echo -e " ${GREEN}3.${PLAIN} ZeroSSL.com"
+    read -rp "请选择证书提供商 [1-3]: " provider
+    case $provider in
+        2) bash ~/.acme.sh/acme.sh --set-default-ca --server buypass && green "切换证书提供商为 BuyPass.com 成功！" ;;
+        3) bash ~/.acme.sh/acme.sh --set-default-ca --server zerossl && green "切换证书提供商为 ZeroSSL.com 成功！" ;;
+        *) bash ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt && green "切换证书提供商为 Letsencrypt.org 成功！" ;;
+    esac
+}
+
+menu() {
+    clear
+    echo -e " ${GREEN}1.${PLAIN} 安装 Acme.sh 域名证书申请脚本"
+    echo -e " ${GREEN}2.${PLAIN} ${RED}卸载 Acme.sh 域名证书申请脚本${PLAIN}"
+    echo " -------------"
+    echo -e " ${GREEN}3.${PLAIN} 申请单域名证书 ${YELLOW}(80端口申请)${PLAIN}"
+    echo -e " ${GREEN}4.${PLAIN} 申请单域名证书 ${YELLOW}(CF API申请)${PLAIN} ${GREEN}(无需解析)${PLAIN} ${RED}(不支持freenom域名)${PLAIN}"
+    echo -e " ${GREEN}5.${PLAIN} 申请泛域名证书 ${YELLOW}(CF API申请)${PLAIN} ${GREEN}(无需解析)${PLAIN} ${RED}(不支持freenom域名)${PLAIN}"
+    echo " -------------"
+    echo -e " ${GREEN}6.${PLAIN} 查看已申请的证书"
+    echo -e " ${GREEN}7.${PLAIN} 撤销并删除已申请的证书"
+    echo -e " ${GREEN}8.${PLAIN} 手动续期已申请的证书"
+    echo -e " ${GREEN}9.${PLAIN} 切换证书颁发机构"
+    echo " -------------"
+    echo -e " ${GREEN}0.${PLAIN} 退出脚本"
+    echo ""
+    read -rp "请输入选项 [0-9]: " menuInput
+    case "$menuInput" in
+        1 ) inst_acme ;;
+        2 ) unst_acme ;;
+        3 ) acme_standalone ;;
+        4 ) acme_cfapiTLD ;;
+        5 ) acme_cfapiNTLD ;;
+        6 ) view_cert ;;
+        7 ) revoke_cert ;;
+        8 ) renew_cert ;;
+        9 ) switch_provider ;;
+        * ) exit 1 ;;
+    esac
+}
+
+menu
