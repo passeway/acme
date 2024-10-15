@@ -104,11 +104,11 @@ check_80(){
         ${PACKAGE_INSTALL[int]} lsof
     fi
     
-    yellow "正在检测 80 端口是否占用..."
+    yellow "正在检测 80 端口是否占用"
     sleep 1
     
     if [[  $(lsof -i:"80" | grep -i -c "listen") -eq 0 ]]; then
-        green "检测到目前 80 端口未被占用"
+        green "检测目前 80 端口未被占用"
         sleep 1
     else
         red "检测到目前 80 端口被其他程序被占用，以下为占用程序信息"
@@ -152,7 +152,6 @@ checktls() {
             green "建议如下: "
             yellow "1. 自行检测防火墙是否打开, 如使用 80 端口申请模式时, 请关闭防火墙或放行 80 端口"
             yellow "2. 同一域名多次申请可能会触发 Let's Encrypt 官方风控, 请尝试使用脚本菜单的 9 选项更换证书颁发机构, 再重试申请证书, 或更换域名、或等待 7 天后再尝试执行脚本"
-            yellow "3. 脚本可能跟不上时代, 建议截图发布到 GitHub Issues、GitLab Issues、论坛或 TG 群询问"
         fi
     fi
 }
@@ -197,7 +196,7 @@ acme_standalone(){
     if echo $domainIP | grep -q "network unreachable\|timed out" || [[ -z $domainIP ]] ; then
         red "未解析出 IP，请检查域名是否输入有误" 
         yellow "是否尝试强行匹配？"
-        green "1. 是，将使用强行匹配"
+        green "1. 是，强行匹配"
         green "2. 否，退出脚本"
         read -p "请输入选项 [1-2]：" ipChoice
         if [[ $ipChoice == 1 ]]; then
@@ -237,7 +236,6 @@ acme_standalone(){
             green "建议如下："
             yellow "1. 请确保 CloudFlare 小云朵为关闭状态 (仅限DNS), 其他域名解析或 CDN 网站设置同理"
             yellow "2. 请检查 DNS 解析设置的 IP 是否为 VPS 的真实 IP"
-            yellow "3. 脚本可能跟不上时代, 建议截图发布到 GitHub Issues、GitLab Issues、论坛或 TG 群询问"
             exit 1
         fi
     fi
@@ -347,9 +345,9 @@ switch_provider(){
     echo -e " ${GREEN}3.${PLAIN} ZeroSSL.com"
     read -rp "请选择证书提供商 [1-3]: " provider
     case $provider in
-        2) bash ~/.acme.sh/acme.sh --set-default-ca --server buypass && green "切换证书提供商为 BuyPass.com 成功！" ;;
-        3) bash ~/.acme.sh/acme.sh --set-default-ca --server zerossl && green "切换证书提供商为 ZeroSSL.com 成功！" ;;
-        *) bash ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt && green "切换证书提供商为 Letsencrypt.org 成功！" ;;
+        2) bash ~/.acme.sh/acme.sh --set-default-ca --server buypass && green "切换证书提供商为 BuyPass.com 成功" ;;
+        3) bash ~/.acme.sh/acme.sh --set-default-ca --server zerossl && green "切换证书提供商为 ZeroSSL.com 成功" ;;
+        *) bash ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt && green "切换证书提供商为 Letsencrypt.org 成功" ;;
     esac
 }
 
