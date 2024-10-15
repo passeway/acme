@@ -36,5 +36,5 @@ acme.sh --install-cert -d example.com --ecc \
 --reloadcmd "systemctl reload nginx"
 ```
 
-[How to use DNS API](https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
+项目地址：https://github.com/acmesh-official/acme.sh [How to use DNS API](https://github.com/acmesh-official/acme.sh/wiki/dnsapi)
 
