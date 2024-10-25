@@ -352,6 +352,7 @@ switch_provider(){
 
 menu() {
     clear
+    echo -e "${GREEN}=== Acme 管理工具 ===${RESET}"
     echo -e " ${GREEN}1.${PLAIN} 安装 Acme.sh"
     echo -e " ${GREEN}2.${PLAIN} 卸载 Acme.sh"
     echo " -------------"
@@ -363,10 +364,9 @@ menu() {
     echo -e " ${GREEN}7.${PLAIN} 删除已申请的证书"
     echo -e " ${GREEN}8.${PLAIN} 续期已申请的证书"
     echo -e " ${GREEN}9.${PLAIN} 切换证书颁发机构"
-    echo " -------------"
-    echo -e " ${GREEN}0.${PLAIN} 退出脚本"
-    echo ""
-    read -rp "请输入选项 [0-9]: " menuInput
+    echo -e " ${GREEN}0.${PLAIN} 退出"
+  echo -e "${GREEN}=====================${RESET}"
+    read -rp "请输入选项编号: " menuInput
     case "$menuInput" in
         1 ) inst_acme ;;
         2 ) unst_acme ;;
