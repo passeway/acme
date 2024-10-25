@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "https://raw.githubusercontent.com/passeway/acme/refs/heads/main/acme.sh",
+      "permanent": true
+    }
+  ]
+}
