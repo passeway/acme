@@ -1,6 +1,6 @@
 ## 一键脚本
 ```
-bash <(curl -fsSL https://raw.githubusercontent.com/passeway/acme/main/acme.sh)
+bash <(curl -fsSL acme-red-eight.vercel.app)
 ```
 安装nginx
 ```
