@@ -111,6 +111,19 @@ install_dependencies
             self.assertNotIn("dnsutils", result.stdout)
             self.assertNotIn("upgrade", result.stdout)
 
+    def test_rhel_preserves_installed_curl_variant(self):
+        for installed, expected in [(0, "curl-minimal"), (1, "curl")]:
+            result = self.shell(f"""
+SYSTEM=rhel
+rpm() {{ [[ "$*" == '-q curl-minimal' ]] && return {installed}; }}
+install_packages() {{ printf '%s\\n' "$@"; }}
+have() {{ return 0; }}
+install_dependencies
+""")
+            packages = result.stdout.splitlines()
+            self.assertIn(expected, packages)
+            self.assertNotIn("curl" if expected == "curl-minimal" else "curl-minimal", packages)
+
     def test_dependency_failure_stops_install(self):
         out = self.shell("install_dependencies() { return 9; }; install_client() { echo BAD; }; install_manager", status=1)
         self.assertNotIn("BAD", out.stdout)

@@ -61,7 +61,7 @@ bash acme-manager.sh
 | Rocky / AlmaLinux / RHEL / Fedora 等 | DNF / YUM | systemd | crond |
 | Alpine | APK | OpenRC | BusyBox crond |
 
-Alpine 使用 `busybox-openrc`，不依赖旧的 `busybox-initscripts` 包。脚本没有架构专用二进制，依赖使用发行版软件源提供的版本。
+Alpine 使用 `busybox-openrc`，不依赖旧的 `busybox-initscripts` 包；RHEL 系兼容预装的 `curl-minimal`。脚本没有架构专用二进制，依赖使用发行版软件源提供的版本。
 
 需要运行中的 systemd 或 OpenRC。普通 Docker 容器没有完整的 init 环境时，脚本会明确提示自动续期未启用。
 

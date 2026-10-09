@@ -57,7 +57,11 @@ ensure_lock_tool() {
 }
 
 install_dependencies() {
-    local -a packages=(curl ca-certificates openssl socat tar jq)
+    local curl_package=curl
+    if [[ "$SYSTEM" == rhel ]] && have rpm && rpm -q curl-minimal >/dev/null 2>&1; then
+        curl_package=curl-minimal
+    fi
+    local -a packages=("$curl_package" ca-certificates openssl socat tar jq)
     case "$SYSTEM" in
         alpine) packages+=(bash flock openrc busybox-openrc) ;;
         debian) packages+=(util-linux cron iproute2) ;;
