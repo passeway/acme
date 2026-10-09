@@ -1,0 +1,54 @@
+name: Manager checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          bash -n acme.sh
+          shellcheck acme.sh tests/*.sh
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [debian:bookworm-slim, ubuntu:24.04, alpine:3.22, rockylinux:9]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch official acme.sh release for offline contract tests
+        run: |
+          curl -fL --proto '=https' --proto-redir '=https' --retry 2 \
+            https://github.com/acmesh-official/acme.sh/archive/refs/tags/3.1.6.tar.gz \
+            -o /tmp/acme-upstream.tar.gz
+          mkdir -p .test-upstream
+          tar -xzf /tmp/acme-upstream.tar.gz --strip-components=1 -C .test-upstream
+      - name: Verify packages, migration, regression tests and upstream integration
+        env:
+          TEST_IMAGE: ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work "$TEST_IMAGE" sh -ec '
+            if command -v apk >/dev/null; then
+              apk add --no-cache bash python3
+            elif command -v apt-get >/dev/null; then
+              apt-get update
+              apt-get install -y --no-install-recommends bash python3
+            else
+              dnf install -y bash python3
+            fi
+            bash tests/test_system.sh
+            python3 -m unittest discover -s tests -v
+            ACME_TEST_SOURCE=/work/.test-upstream bash tests/test_upstream.sh
+          '
