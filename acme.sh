@@ -64,12 +64,12 @@ install_dependencies() {
     local -a packages=("$curl_package" ca-certificates openssl socat tar jq)
     case "$SYSTEM" in
         alpine) packages+=(bash flock openrc busybox-openrc) ;;
-        debian) packages+=(util-linux cron iproute2) ;;
-        rhel) packages+=(util-linux cronie iproute) ;;
+        debian) packages+=(util-linux cron iproute2 diffutils) ;;
+        rhel) packages+=(util-linux cronie iproute diffutils) ;;
     esac
     install_packages "${packages[@]}" || return 1
     local cmd
-    for cmd in curl openssl socat tar jq flock crontab; do
+    for cmd in curl openssl socat tar jq flock crontab cmp; do
         have "$cmd" || { error "缺少依赖: $cmd"; return 1; }
     done
 }
@@ -259,6 +259,7 @@ RENEW
 
 configure_schedule() {
     local mode=${1:-install} backup file tmp='' root_changed=0 system_changed=0
+    have cmp || { error "缺少 cmp，请使用菜单 1 修复依赖"; return 1; }
     read_root_cron "$RUN_TMP/root.cron" || return 1
     filter_cron "$RUN_TMP/root.cron" 0 > "$RUN_TMP/root.new" || return 1
     if [[ -f "$SYSTEM_CRONTAB" ]]; then
@@ -335,7 +336,7 @@ require_ready() {
     ensure_private_dirs || return 1
     restore_tls_verification || return 1
     local cmd
-    for cmd in openssl socat crontab; do
+    for cmd in openssl socat crontab cmp; do
         have "$cmd" || { error "缺少 $cmd，请使用菜单 1 修复依赖"; return 1; }
     done
     configure_schedule

@@ -107,6 +107,8 @@ have() {{ return 0; }}
 install_dependencies
 """)
             self.assertIn(expected, result.stdout)
+            if family in ("rhel", "debian"):
+                self.assertIn("diffutils", result.stdout)
             self.assertNotIn("busybox-initscripts", result.stdout)
             self.assertNotIn("dnsutils", result.stdout)
             self.assertNotIn("upgrade", result.stdout)
@@ -201,6 +203,17 @@ crontab() { if [[ "$1" == -l ]]; then echo 'permission denied' >&2; return 1; el
 configure_schedule
 """, status=1)
         self.assertNotIn("BAD", out.stdout)
+
+    def test_missing_comparison_tool_stops_before_crontab_changes(self):
+        self.seed_cron()
+        original = (self.path / "state/current.cron").read_text()
+        out = self.shell("""
+have() { [[ "$1" != cmp ]]; }
+crontab() { echo BAD; return 0; }
+configure_schedule
+""", status=1)
+        self.assertNotIn("BAD", out.stdout)
+        self.assertEqual((self.path / "state/current.cron").read_text(), original)
 
     def test_crontab_empty_detection_for_both_implementations(self):
         for message in ("no crontab for root", "crontab: can't open 'root': No such file or directory"):
